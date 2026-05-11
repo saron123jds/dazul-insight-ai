@@ -14,6 +14,7 @@ const SEARCH_ROOT = process.env.SEARCH_ROOT || 'S:\\';
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/generate';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1';
 const SEARCH_LIMIT = Number(process.env.SEARCH_LIMIT || 200);
+const SEARCH_TIMEOUT_MS = Number(process.env.SEARCH_TIMEOUT_MS || 5000);
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
@@ -31,7 +32,15 @@ function resolverPastaBusca() {
   return os.homedir();
 }
 
-function buscarArquivos(dir, termo, resultados = [], limite = SEARCH_LIMIT) {
+function buscarArquivos(dir, termo, resultados = [], opcoes = {}) {
+  const limite = opcoes.limite ?? SEARCH_LIMIT;
+  const inicio = opcoes.inicio ?? Date.now();
+  const timeoutMs = opcoes.timeoutMs ?? SEARCH_TIMEOUT_MS;
+
+  if (Date.now() - inicio > timeoutMs || resultados.length >= limite) {
+    return resultados;
+  }
+
   let arquivos;
 
   try {
@@ -41,7 +50,7 @@ function buscarArquivos(dir, termo, resultados = [], limite = SEARCH_LIMIT) {
   }
 
   for (const arquivo of arquivos) {
-    if (resultados.length >= limite) {
+    if (resultados.length >= limite || Date.now() - inicio > timeoutMs) {
       break;
     }
 
@@ -55,7 +64,7 @@ function buscarArquivos(dir, termo, resultados = [], limite = SEARCH_LIMIT) {
     }
 
     if (stat.isDirectory()) {
-      buscarArquivos(full, termo, resultados, limite);
+      buscarArquivos(full, termo, resultados, { limite, inicio, timeoutMs });
       continue;
     }
 
