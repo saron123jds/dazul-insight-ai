@@ -14,7 +14,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1';
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-function buscarArquivos(dir, termo, resultados = []) {
+function buscarArquivos(dir, termo, resultados = [], limite = 200) {
 
     try {
 
@@ -28,9 +28,13 @@ function buscarArquivos(dir, termo, resultados = []) {
 
                 const stat = fs.statSync(full);
 
+                if (resultados.length >= limite) {
+                    return;
+                }
+
                 if(stat.isDirectory()){
 
-                    buscarArquivos(full, termo, resultados);
+                    buscarArquivos(full, termo, resultados, limite);
 
                 }else{
 
@@ -40,6 +44,9 @@ function buscarArquivos(dir, termo, resultados = []) {
                         )
                     ){
                         resultados.push(full);
+                        if (resultados.length >= limite) {
+                            return;
+                        }
                     }
 
                 }
@@ -85,7 +92,14 @@ async function perguntarOllama(pergunta, resultados = []) {
 
 app.post('/perguntar', async (req, res) => {
 
-    const pergunta = req.body.pergunta || '';
+    const pergunta = (req.body.pergunta || '').trim();
+
+    if (pergunta.length < 3) {
+        return res.status(400).json({
+            resultados: [],
+            erro: 'Digite pelo menos 3 caracteres para pesquisar.'
+        });
+    }
 
     const resultados = buscarArquivos(PASTA, pergunta);
 
