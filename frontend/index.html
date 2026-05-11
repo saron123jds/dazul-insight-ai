@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -40,6 +39,7 @@ button{
     color:white;
 }
 
+#respostaIA,
 #resultado{
     margin-top:30px;
     background:#334155;
@@ -54,6 +54,10 @@ button{
     border-bottom:1px solid #555;
 }
 
+.erro{
+    color:#fca5a5;
+}
+
 </style>
 
 </head>
@@ -63,7 +67,7 @@ button{
 
 <h1>Dazul Insight AI</h1>
 
-<p>Sistema IA Empresarial</p>
+<p>Sistema IA Empresarial + Ollama</p>
 
 <input id="pergunta" placeholder="Digite o que deseja pesquisar..." />
 
@@ -71,6 +75,7 @@ button{
 Pesquisar
 </button>
 
+<div id="respostaIA">A resposta da IA aparecerá aqui.</div>
 <div id="resultado"></div>
 
 </div>
@@ -81,7 +86,11 @@ async function pesquisar(){
 
     const pergunta = document.getElementById('pergunta').value;
 
-    const resposta = await fetch('/perguntar', {
+    const apiBase = window.location.protocol === 'file:' ? 'http://127.0.0.1:3333' : '';
+
+    try {
+
+    const resposta = await fetch(`${apiBase}/perguntar`, {
         method:'POST',
         headers:{
             'Content-Type':'application/json'
@@ -113,7 +122,27 @@ async function pesquisar(){
 
     }
 
+    if(!resposta.ok){
+        document.getElementById('respostaIA').innerHTML = `
+            <p class="erro">${dados.erro || 'Erro ao consultar IA'}</p>
+            <p class="erro">${dados.detalhe || ''}</p>
+        `;
+    }else{
+        document.getElementById('respostaIA').innerHTML = `
+            <h3>Resposta da IA</h3>
+            <p>${dados.respostaIA || 'Sem resposta do modelo.'}</p>
+        `;
+    }
+
     document.getElementById('resultado').innerHTML = html;
+
+    } catch (erro) {
+        document.getElementById('respostaIA').innerHTML = `
+            <p class="erro">Não foi possível pesquisar.</p>
+            <p class="erro">${erro.message}</p>
+        `;
+        document.getElementById('resultado').innerHTML = '<p>Nenhum arquivo encontrado</p>';
+    }
 
 }
 
