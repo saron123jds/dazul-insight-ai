@@ -1,158 +1,175 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Dazul Insight AI</title>
 
 <style>
-
-body{
-    background:#0f172a;
-    color:white;
-    font-family:Arial;
-    padding:40px;
+body {
+    background: #0f172a;
+    color: white;
+    font-family: Arial, sans-serif;
+    padding: 40px;
 }
 
-.box{
-    background:#1e293b;
-    border-radius:20px;
-    padding:30px;
+.box {
+    background: #1e293b;
+    border-radius: 20px;
+    padding: 30px;
 }
 
-input{
-    width:100%;
-    padding:15px;
-    border-radius:10px;
-    border:none;
-    margin-top:20px;
-    font-size:18px;
+input {
+    width: 100%;
+    padding: 15px;
+    border-radius: 10px;
+    border: none;
+    margin-top: 20px;
+    font-size: 18px;
 }
 
-button{
-    margin-top:20px;
-    padding:15px 30px;
-    border:none;
-    border-radius:10px;
-    cursor:pointer;
-    font-size:18px;
-    background:#2563eb;
-    color:white;
+button {
+    margin-top: 20px;
+    padding: 15px 30px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 18px;
+    background: #2563eb;
+    color: white;
 }
 
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#status,
 #respostaIA,
-#resultado{
-    margin-top:30px;
-    background:#334155;
-    padding:20px;
-    border-radius:15px;
-    max-height:500px;
-    overflow:auto;
+#resultado {
+    margin-top: 20px;
+    background: #334155;
+    padding: 20px;
+    border-radius: 15px;
 }
 
-.item{
-    padding:10px;
-    border-bottom:1px solid #555;
+.item {
+    padding: 10px;
+    border-bottom: 1px solid #555;
 }
 
-.erro{
-    color:#fca5a5;
+.erro {
+    color: #fca5a5;
 }
 
+.ok {
+    color: #86efac;
+}
 </style>
-
 </head>
 <body>
-
 <div class="box">
+    <h1>Dazul Insight AI</h1>
+    <p>Sistema IA Empresarial + Ollama</p>
 
-<h1>Dazul Insight AI</h1>
+    <input id="pergunta" placeholder="Digite o que deseja pesquisar..." />
 
-<p>Sistema IA Empresarial + Ollama</p>
+    <button id="btnPesquisar" onclick="pesquisar()">Pesquisar</button>
 
-<input id="pergunta" placeholder="Digite o que deseja pesquisar..." />
-
-<button onclick="pesquisar()">
-Pesquisar
-</button>
-
-<div id="respostaIA">A resposta da IA aparecerá aqui.</div>
-<div id="resultado"></div>
-
+    <div id="status">Checando conexão com servidor...</div>
+    <div id="respostaIA">A resposta da IA aparecerá aqui.</div>
+    <div id="resultado"></div>
 </div>
 
 <script>
+const statusEl = document.getElementById('status');
+const respostaIAEl = document.getElementById('respostaIA');
+const resultadoEl = document.getElementById('resultado');
+const inputEl = document.getElementById('pergunta');
+const btnEl = document.getElementById('btnPesquisar');
 
-async function pesquisar(){
+function getApiBase() {
+    return window.location.protocol === 'file:' ? 'http://127.0.0.1:3333' : '';
+}
 
-    const pergunta = document.getElementById('pergunta').value.trim();
+async function checarServidor() {
+    try {
+        const resposta = await fetch(`${getApiBase()}/health`);
+        const dados = await resposta.json();
 
-    const apiBase = window.location.protocol === 'file:' ? 'http://127.0.0.1:3333' : '';
+        if (!resposta.ok) {
+            throw new Error('Servidor indisponível');
+        }
 
-    if(pergunta.length < 3){
-        document.getElementById('respostaIA').innerHTML = '<p class="erro">Digite pelo menos 3 caracteres para pesquisar.</p>';
-        document.getElementById('resultado').innerHTML = '<p>Nenhum arquivo encontrado</p>';
+        statusEl.innerHTML = `<span class="ok">Servidor online.</span> Pasta de busca: <strong>${dados.pastaBusca}</strong> | Modelo: <strong>${dados.ollamaModel}</strong>`;
+    } catch (erro) {
+        statusEl.innerHTML = `<span class="erro">Servidor offline.</span> Verifique se backend está rodando na porta 3333. (${erro.message})`;
+    }
+}
+
+async function pesquisar() {
+    const pergunta = inputEl.value.trim();
+
+    if (pergunta.length < 3) {
+        respostaIAEl.innerHTML = '<p class="erro">Digite pelo menos 3 caracteres para pesquisar.</p>';
+        resultadoEl.innerHTML = '<p>Nenhum arquivo encontrado</p>';
         return;
     }
 
+    btnEl.disabled = true;
+    btnEl.textContent = 'Pesquisando...';
+    respostaIAEl.textContent = 'Consultando IA local...';
+
     try {
-
-    const resposta = await fetch(`${apiBase}/perguntar`, {
-        method:'POST',
-        headers:{
-            'Content-Type':'application/json'
-        },
-        body: JSON.stringify({
-            pergunta
-        })
-    });
-
-    const dados = await resposta.json();
-
-    let html = '';
-
-    if(dados.resultados.length === 0){
-
-        html = '<p>Nenhum arquivo encontrado</p>';
-
-    }else{
-
-        dados.resultados.forEach(item => {
-
-            html += `
-                <div class="item">
-                    ${item}
-                </div>
-            `;
-
+        const resposta = await fetch(`${getApiBase()}/perguntar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ pergunta }),
         });
 
-    }
+        const dados = await resposta.json();
 
-    if(!resposta.ok){
-        document.getElementById('respostaIA').innerHTML = `
-            <p class="erro">${dados.erro || 'Erro ao consultar IA'}</p>
-            <p class="erro">${dados.detalhe || ''}</p>
-        `;
-    }else{
-        document.getElementById('respostaIA').innerHTML = `
-            <h3>Resposta da IA</h3>
-            <p>${dados.respostaIA || 'Sem resposta do modelo.'}</p>
-        `;
-    }
+        if (!resposta.ok) {
+            respostaIAEl.innerHTML = `
+                <p class="erro">${dados.erro || 'Erro ao consultar IA'}</p>
+                <p class="erro">${dados.detalhe || ''}</p>
+                <p>${dados.dica || ''}</p>
+            `;
+        } else {
+            respostaIAEl.innerHTML = `
+                <h3>Resposta da IA</h3>
+                <p>${dados.respostaIA || 'Sem resposta do modelo.'}</p>
+            `;
+        }
 
-    document.getElementById('resultado').innerHTML = html;
-
+        if (!Array.isArray(dados.resultados) || dados.resultados.length === 0) {
+            resultadoEl.innerHTML = `<p>Nenhum arquivo encontrado na pasta: <strong>${dados.pastaBusca || 'N/A'}</strong></p>`;
+        } else {
+            resultadoEl.innerHTML = dados.resultados
+                .map((item) => `<div class="item">${item}</div>`)
+                .join('');
+        }
     } catch (erro) {
-        document.getElementById('respostaIA').innerHTML = `
+        respostaIAEl.innerHTML = `
             <p class="erro">Não foi possível pesquisar.</p>
             <p class="erro">${erro.message}</p>
         `;
-        document.getElementById('resultado').innerHTML = '<p>Nenhum arquivo encontrado</p>';
+        resultadoEl.innerHTML = '<p>Nenhum arquivo encontrado</p>';
+    } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Pesquisar';
     }
-
 }
 
-</script>
+inputEl.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        pesquisar();
+    }
+});
 
+checarServidor();
+</script>
 </body>
 </html>
