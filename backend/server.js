@@ -11,12 +11,31 @@ app.use(express.json());
 
 const PORT = Number(process.env.PORT || 3333);
 const SEARCH_ROOT = process.env.SEARCH_ROOT || 'S:\\';
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/generate';
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1';
 const SEARCH_LIMIT = Number(process.env.SEARCH_LIMIT || 200);
 const SEARCH_TIMEOUT_MS = Number(process.env.SEARCH_TIMEOUT_MS || 5000);
 
 app.use(express.static(path.join(__dirname, '../frontend')));
+
+
+function resolverOllamaGenerateUrl(url = '') {
+  const valor = String(url).trim();
+
+  if (!valor) {
+    return 'http://127.0.0.1:11434/api/generate';
+  }
+
+  if (valor.endsWith('/api/generate')) {
+    return valor;
+  }
+
+  if (valor.endsWith('/api')) {
+    return `${valor}/generate`;
+  }
+
+  return `${valor.replace(/\/+$/, '')}/api/generate`;
+}
 
 function resolverPastaBusca() {
   if (SEARCH_ROOT && fs.existsSync(SEARCH_ROOT)) {
@@ -93,7 +112,7 @@ async function perguntarOllama(pergunta, resultados = []) {
   const timeout = setTimeout(() => controller.abort(), 45000);
 
   try {
-    const resposta = await fetch(OLLAMA_URL, {
+    const resposta = await fetch(resolverOllamaGenerateUrl(OLLAMA_URL), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -134,7 +153,7 @@ app.get('/health', (_req, res) => {
     ok: true,
     porta: PORT,
     pastaBusca: resolverPastaBusca(),
-    ollamaUrl: OLLAMA_URL,
+    ollamaUrl: resolverOllamaGenerateUrl(OLLAMA_URL),
     ollamaModel: OLLAMA_MODEL,
   });
 });
