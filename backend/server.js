@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const app = express();
@@ -8,124 +9,145 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PASTA = 'S:\\';
+const PORT = Number(process.env.PORT || 3333);
+const SEARCH_ROOT = process.env.SEARCH_ROOT || 'S:\\';
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/generate';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1';
+const SEARCH_LIMIT = Number(process.env.SEARCH_LIMIT || 200);
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-function buscarArquivos(dir, termo, resultados = [], limite = 200) {
+function resolverPastaBusca() {
+  if (SEARCH_ROOT && fs.existsSync(SEARCH_ROOT)) {
+    return SEARCH_ROOT;
+  }
 
-    try {
+  const fallback = path.join(os.homedir(), 'Documents');
 
-        const arquivos = fs.readdirSync(dir);
+  if (fs.existsSync(fallback)) {
+    return fallback;
+  }
 
-        arquivos.forEach((arquivo) => {
+  return os.homedir();
+}
 
-            const full = path.join(dir, arquivo);
+function buscarArquivos(dir, termo, resultados = [], limite = SEARCH_LIMIT) {
+  let arquivos;
 
-            try {
-
-                const stat = fs.statSync(full);
-
-                if (resultados.length >= limite) {
-                    return;
-                }
-
-                if(stat.isDirectory()){
-
-                    buscarArquivos(full, termo, resultados, limite);
-
-                }else{
-
-                    if(
-                        arquivo.toLowerCase().includes(
-                            termo.toLowerCase()
-                        )
-                    ){
-                        resultados.push(full);
-                        if (resultados.length >= limite) {
-                            return;
-                        }
-                    }
-
-                }
-
-            } catch(err){}
-
-        });
-
-    } catch(err){}
-
+  try {
+    arquivos = fs.readdirSync(dir);
+  } catch {
     return resultados;
+  }
+
+  for (const arquivo of arquivos) {
+    if (resultados.length >= limite) {
+      break;
+    }
+
+    const full = path.join(dir, arquivo);
+
+    let stat;
+    try {
+      stat = fs.statSync(full);
+    } catch {
+      continue;
+    }
+
+    if (stat.isDirectory()) {
+      buscarArquivos(full, termo, resultados, limite);
+      continue;
+    }
+
+    if (arquivo.toLowerCase().includes(termo.toLowerCase())) {
+      resultados.push(full);
+    }
+  }
+
+  return resultados;
 }
 
 async function perguntarOllama(pergunta, resultados = []) {
-    const prompt = [
-        'Você é o Dazul Insight AI e responde em português do Brasil.',
-        'Use os resultados da busca para orientar a resposta quando fizer sentido.',
-        resultados.length > 0
-            ? `Resultados encontrados:\n${resultados.slice(0, 50).map((item, i) => `${i + 1}. ${item}`).join('\n')}`
-            : 'Nenhum arquivo foi encontrado para esta busca.',
-        `Pergunta do usuário: ${pergunta}`
-    ].join('\n\n');
+  const prompt = [
+    'Você é o Dazul Insight AI e responde em português do Brasil.',
+    'Use os resultados da busca para orientar a resposta quando fizer sentido.',
+    resultados.length > 0
+      ? `Resultados encontrados:\n${resultados
+          .slice(0, 50)
+          .map((item, i) => `${i + 1}. ${item}`)
+          .join('\n')}`
+      : 'Nenhum arquivo foi encontrado para esta busca.',
+    `Pergunta do usuário: ${pergunta}`,
+  ].join('\n\n');
 
-    const resposta = await fetch(OLLAMA_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            model: OLLAMA_MODEL,
-            prompt,
-            stream: false
-        })
-    });
+  const resposta = await fetch(OLLAMA_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      prompt,
+      stream: false,
+    }),
+  });
 
-    if (!resposta.ok) {
-        throw new Error(`Falha ao consultar Ollama (HTTP ${resposta.status})`);
-    }
+  if (!resposta.ok) {
+    throw new Error(`Falha ao consultar Ollama (HTTP ${resposta.status})`);
+  }
 
-    const dados = await resposta.json();
-    return (dados.response || '').trim();
+  const dados = await resposta.json();
+  return (dados.response || '').trim();
 }
 
-app.post('/perguntar', async (req, res) => {
-
-    const pergunta = (req.body.pergunta || '').trim();
-
-    if (pergunta.length < 3) {
-        return res.status(400).json({
-            resultados: [],
-            erro: 'Digite pelo menos 3 caracteres para pesquisar.'
-        });
-    }
-
-    const resultados = buscarArquivos(PASTA, pergunta);
-
-    try {
-        const respostaIA = await perguntarOllama(pergunta, resultados);
-
-        res.json({
-            resultados,
-            respostaIA
-        });
-    } catch (err) {
-        res.status(502).json({
-            resultados,
-            erro: 'Não foi possível conectar ao Ollama. Verifique se o serviço está ativo.',
-            detalhe: err.message
-        });
-    }
-
+app.get('/health', (_req, res) => {
+  res.json({
+    ok: true,
+    porta: PORT,
+    pastaBusca: resolverPastaBusca(),
+    ollamaUrl: OLLAMA_URL,
+    ollamaModel: OLLAMA_MODEL,
+  });
 });
 
-app.listen(3333, () => {
+app.post('/perguntar', async (req, res) => {
+  const pergunta = (req.body.pergunta || '').trim();
 
-    console.log('Servidor iniciado na porta 3333');
+  if (pergunta.length < 3) {
+    return res.status(400).json({
+      resultados: [],
+      erro: 'Digite pelo menos 3 caracteres para pesquisar.',
+    });
+  }
 
+  const pastaBusca = resolverPastaBusca();
+  const resultados = buscarArquivos(pastaBusca, pergunta);
+
+  try {
+    const respostaIA = await perguntarOllama(pergunta, resultados);
+
+    return res.json({
+      resultados,
+      respostaIA,
+      pastaBusca,
+    });
+  } catch (err) {
+    return res.status(502).json({
+      resultados,
+      erro: 'Não foi possível conectar ao Ollama. Verifique se o serviço está ativo e com modelo baixado.',
+      detalhe: err.message,
+      dica: `Teste no terminal: ollama run ${OLLAMA_MODEL}`,
+      pastaBusca,
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor iniciado na porta ${PORT}`);
+  console.log(`Pasta de busca ativa: ${resolverPastaBusca()}`);
+
+  if (process.platform === 'win32') {
     const { exec } = require('child_process');
-
-    exec('start http://localhost:3333');
-
+    exec(`start http://localhost:${PORT}`);
+  }
 });
