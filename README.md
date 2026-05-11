@@ -16,9 +16,9 @@
 1. Inicie o Ollama:
    - `ollama serve`
 2. Baixe o modelo (uma vez):
-   - `ollama pull llama3.1`
+   - `ollama pull llama3.1:latest`
 3. Teste o modelo local:
-   - `ollama run llama3.1`
+   - `ollama run llama3.1:latest`
 4. Inicie o sistema:
    - `npm install`
    - `npm start`
@@ -27,8 +27,8 @@
 ## Variáveis de ambiente
 
 - `PORT` (padrão: `3333`)
-- `OLLAMA_URL` (padrão: `http://127.0.0.1:11434/api/generate`)
-- `OLLAMA_MODEL` (padrão: `llama3.1`)
+- `OLLAMA_URL` fixo: `http://127.0.0.1:11434/api/generate`
+- `OLLAMA_MODEL` fixo: `llama3.1:latest`
 - `SEARCH_ROOT` (padrão: `S:\`)
 - `SEARCH_LIMIT` (padrão: `200`)
 
@@ -38,4 +38,4 @@
 - Se clicar em **Pesquisar** e nada acontecer:
   - confira se o backend está rodando;
   - confira se o Ollama está ativo;
-  - teste no terminal com `ollama run llama3.1`.
+  - teste no terminal com `ollama run llama3.1:latest`.
