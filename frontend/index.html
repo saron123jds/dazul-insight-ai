@@ -1,0 +1,123 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Dazul Insight AI</title>
+
+<style>
+
+body{
+    background:#0f172a;
+    color:white;
+    font-family:Arial;
+    padding:40px;
+}
+
+.box{
+    background:#1e293b;
+    border-radius:20px;
+    padding:30px;
+}
+
+input{
+    width:100%;
+    padding:15px;
+    border-radius:10px;
+    border:none;
+    margin-top:20px;
+    font-size:18px;
+}
+
+button{
+    margin-top:20px;
+    padding:15px 30px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:18px;
+    background:#2563eb;
+    color:white;
+}
+
+#resultado{
+    margin-top:30px;
+    background:#334155;
+    padding:20px;
+    border-radius:15px;
+    max-height:500px;
+    overflow:auto;
+}
+
+.item{
+    padding:10px;
+    border-bottom:1px solid #555;
+}
+
+</style>
+
+</head>
+<body>
+
+<div class="box">
+
+<h1>Dazul Insight AI</h1>
+
+<p>Sistema IA Empresarial</p>
+
+<input id="pergunta" placeholder="Digite o que deseja pesquisar..." />
+
+<button onclick="pesquisar()">
+Pesquisar
+</button>
+
+<div id="resultado"></div>
+
+</div>
+
+<script>
+
+async function pesquisar(){
+
+    const pergunta = document.getElementById('pergunta').value;
+
+    const resposta = await fetch('/perguntar', {
+        method:'POST',
+        headers:{
+            'Content-Type':'application/json'
+        },
+        body: JSON.stringify({
+            pergunta
+        })
+    });
+
+    const dados = await resposta.json();
+
+    let html = '';
+
+    if(dados.resultados.length === 0){
+
+        html = '<p>Nenhum arquivo encontrado</p>';
+
+    }else{
+
+        dados.resultados.forEach(item => {
+
+            html += `
+                <div class="item">
+                    ${item}
+                </div>
+            `;
+
+        });
+
+    }
+
+    document.getElementById('resultado').innerHTML = html;
+
+}
+
+</script>
+
+</body>
+</html>
