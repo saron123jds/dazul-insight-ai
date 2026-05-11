@@ -11,31 +11,15 @@ app.use(express.json());
 
 const PORT = Number(process.env.PORT || 3333);
 const SEARCH_ROOT = process.env.SEARCH_ROOT || 'S:\\';
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.1';
+const OLLAMA_URL = 'http://127.0.0.1:11434/api/generate';
+const OLLAMA_MODEL = 'llama3.1:latest';
+const OLLAMA_TIMEOUT_MS = 180000;
 const SEARCH_LIMIT = Number(process.env.SEARCH_LIMIT || 200);
 const SEARCH_TIMEOUT_MS = Number(process.env.SEARCH_TIMEOUT_MS || 5000);
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 
-function resolverOllamaGenerateUrl(url = '') {
-  const valor = String(url).trim();
-
-  if (!valor) {
-    return 'http://127.0.0.1:11434/api/generate';
-  }
-
-  if (valor.endsWith('/api/generate')) {
-    return valor;
-  }
-
-  if (valor.endsWith('/api')) {
-    return `${valor}/generate`;
-  }
-
-  return `${valor.replace(/\/+$/, '')}/api/generate`;
-}
 
 function resolverPastaBusca() {
   if (SEARCH_ROOT && fs.existsSync(SEARCH_ROOT)) {
@@ -109,10 +93,12 @@ async function perguntarOllama(pergunta, resultados = []) {
   ].join('\n\n');
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
+  const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
 
   try {
-    const resposta = await fetch(resolverOllamaGenerateUrl(OLLAMA_URL), {
+    console.log('Consultando Ollama...');
+
+    const resposta = await fetch(OLLAMA_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -126,10 +112,17 @@ async function perguntarOllama(pergunta, resultados = []) {
     });
 
     if (!resposta.ok) {
-      throw new Error(`Falha ao consultar Ollama (HTTP ${resposta.status})`);
+      const detalhe = await resposta.text();
+
+      if (resposta.status === 404) {
+        throw new Error(`Modelo não encontrado no Ollama: ${OLLAMA_MODEL}. Detalhe: ${detalhe}`);
+      }
+
+      throw new Error(`Falha ao consultar Ollama (HTTP ${resposta.status}). Detalhe: ${detalhe}`);
     }
 
     const dados = await resposta.json();
+    console.log('Resposta recebida');
     const texto = (dados.response || '').trim();
 
     if (!texto) {
@@ -139,7 +132,18 @@ async function perguntarOllama(pergunta, resultados = []) {
     return texto;
   } catch (err) {
     if (err.name === 'AbortError') {
-      throw new Error('Tempo limite excedido ao consultar o Ollama (45s).');
+      console.error(err);
+      throw new Error(`Tempo limite excedido ao consultar o Ollama (${OLLAMA_TIMEOUT_MS}ms).`);
+    }
+
+    console.error(err);
+
+    if (err.code === 'ECONNREFUSED') {
+      throw new Error('Conexão recusada pelo Ollama em 127.0.0.1:11434. Verifique se o serviço está online.');
+    }
+
+    if (err.cause && err.cause.code === 'ECONNREFUSED') {
+      throw new Error('Ollama offline ou inacessível em 127.0.0.1:11434 (ECONNREFUSED).');
     }
 
     throw err;
@@ -153,7 +157,7 @@ app.get('/health', (_req, res) => {
     ok: true,
     porta: PORT,
     pastaBusca: resolverPastaBusca(),
-    ollamaUrl: resolverOllamaGenerateUrl(OLLAMA_URL),
+    ollamaUrl: OLLAMA_URL,
     ollamaModel: OLLAMA_MODEL,
   });
 });
