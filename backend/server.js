@@ -80,24 +80,44 @@ async function perguntarOllama(pergunta, resultados = []) {
     `Pergunta do usuário: ${pergunta}`,
   ].join('\n\n');
 
-  const resposta = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      prompt,
-      stream: false,
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
 
-  if (!resposta.ok) {
-    throw new Error(`Falha ao consultar Ollama (HTTP ${resposta.status})`);
+  try {
+    const resposta = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        prompt,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!resposta.ok) {
+      throw new Error(`Falha ao consultar Ollama (HTTP ${resposta.status})`);
+    }
+
+    const dados = await resposta.json();
+    const texto = (dados.response || '').trim();
+
+    if (!texto) {
+      throw new Error('Ollama respondeu sem conteúdo. Verifique se o modelo está carregado corretamente.');
+    }
+
+    return texto;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Tempo limite excedido ao consultar o Ollama (45s).');
+    }
+
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const dados = await resposta.json();
-  return (dados.response || '').trim();
 }
 
 app.get('/health', (_req, res) => {
